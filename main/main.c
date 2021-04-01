@@ -53,6 +53,7 @@ void uart1_task(void *pvParameter)
     char* rxmesage;
     char* repl_data = "";
     setup_muxed_uarts(1);
+    int64_t start, diff;
     while(1){
     	if( xQueue != 0 ) {
 			if( (xQueuePeek( xQueue, &( rxmesage ), ( portTickType ) 10 )) == pdTRUE)
@@ -64,6 +65,13 @@ void uart1_task(void *pvParameter)
                     repl_data = "MULUART-1-STATUS";
                     printf("\tUART-1 REPLY send: %s len=%d \n",repl_data, uxQueueMessagesWaiting(xQueue));
                     xQueueSend(xQueue,(void *)&repl_data,(TickType_t )0); 
+            
+                    start = esp_timer_get_time();
+                    uart_write_bytes(1, (const char *)rxmesage, 10);
+                    uart_wait_tx_done(1, 2);
+                    diff = esp_timer_get_time() - start;
+                    printf(" diff=%d    \n",(int)diff);
+
                 }
                 vTaskDelay(500/portTICK_PERIOD_MS); //wait for 500 ms
 			}
@@ -86,6 +94,10 @@ void uart2_task(void *pvParameter)
                     repl_data = "MULUART-2-STATUS";
                     printf("\tUART-2 REPLY send: %s len=%d \n",repl_data, uxQueueMessagesWaiting(xQueue));
                     xQueueSend(xQueue,(void *)&repl_data,(TickType_t )0); 
+
+                    uart_write_bytes(2, (const char *)rxmesage, 10);
+                    uart_wait_tx_done(2, 2);
+
                 }
                 vTaskDelay(500/portTICK_PERIOD_MS); //wait for 500 ms
 			}
