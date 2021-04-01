@@ -3,9 +3,12 @@
 #include "freertos/task.h"
 #include "freertos/queue.h"
 #include "string.h"
+#include "driver/uart.h"
+#include "driver/gpio.h"
 
 #define BUF 1024
 xQueueHandle xQueue;
+#define BUF_SIZE (1024)
 
 typedef enum {
     UART1_STATUS,              /*!< UART data event*/
@@ -15,12 +18,41 @@ typedef enum {
 typedef struct {
     multy_uart_event_type_t type; /*!< UART event type */
     bool flag;      
-} uart_event_t;
+} multy_uart_event_t;
+
+void setup_muxed_uarts(int uart_num);
+
+void setup_muxed_uarts(int uart_num){
+    uart_config_t uart_config = {
+        .baud_rate = 9600,
+        .data_bits = UART_DATA_8_BITS,
+        .parity    = UART_PARITY_DISABLE,
+        .stop_bits = UART_STOP_BITS_1,
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+        .source_clk = UART_SCLK_APB,
+    };
+    int intr_alloc_flags = 0;
+
+#if CONFIG_UART_ISR_IN_IRAM
+    intr_alloc_flags = ESP_INTR_FLAG_IRAM;
+#endif
+
+    ESP_ERROR_CHECK(uart_driver_install(uart_num, BUF_SIZE * 2, 0, 0, NULL, intr_alloc_flags));
+    ESP_ERROR_CHECK(uart_param_config(uart_num, &uart_config));
+    if(uart_num == 1){
+        uart_set_pin(1, 18, 34, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+    }
+    if(uart_num == 2){
+        uart_set_pin(2, 19, 35, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+    }
+    uart_flush(uart_num);
+}
 
 void uart1_task(void *pvParameter)
 {
     char* rxmesage;
     char* repl_data = "";
+    setup_muxed_uarts(1);
     while(1){
     	if( xQueue != 0 ) {
 			if( (xQueuePeek( xQueue, &( rxmesage ), ( portTickType ) 10 )) == pdTRUE)
@@ -43,6 +75,7 @@ void uart2_task(void *pvParameter)
 {
     char* rxmesage;
     char* repl_data = "";
+    setup_muxed_uarts(2);
     while(1){
     	if( xQueue != 0 ) {
 			if( (xQueuePeek( xQueue, &( rxmesage ), ( portTickType ) 10 )) == pdTRUE)
@@ -103,8 +136,8 @@ void app_main()
         vTaskDelay(1000/portTICK_PERIOD_MS); //wait for a second
         xTaskCreate(&routing_task,"routing_task",1024*4,NULL,5,NULL);
         printf("routing_task task  started\n");
-        xTaskCreate(&uart1_task,"uart1_task",1024*4,NULL,5,NULL);
-        xTaskCreate(&uart2_task,"uart2_task",1024*4,NULL,5,NULL);
+        xTaskCreate(&uart1_task,"uart1_task",1024*4,NULL,10,NULL);
+        xTaskCreate(&uart2_task,"uart2_task",1024*4,NULL,10,NULL);
         printf("uart_task task  started\n");
     }else{
         printf("Queue creation failed");
