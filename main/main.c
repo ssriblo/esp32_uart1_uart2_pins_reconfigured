@@ -55,7 +55,7 @@ void uart1_task(void *pvParameter)
     char* repl_data = "";
     while(1){
     	if( xQueueUart1Event != 0 ) {
-			if( (xQueueReceive( xQueueUart1Data, &( rxmesage ), ( portTickType ) 10 )) == pdTRUE)
+			if( (xQueueReceive( xQueueUart1Data, &( rxmesage ), ( portTickType ) 0 )) == pdTRUE)
 			{
 #ifdef PRINT_LOG
                 ESP_LOGI(TAG, "\tUART%d value CONSUMED on queue: %s ", UARTNUM, rxmesage);
@@ -80,7 +80,7 @@ void uart2_task(void *pvParameter)
     char* repl_data = "";
     while(1){
     	if( xQueueUart1Event != 0 ) {
-			if( (xQueueReceive( xQueueUart2Data, &( rxmesage ), ( portTickType ) 10 )) == pdTRUE)
+			if( (xQueueReceive( xQueueUart2Data, &( rxmesage ), ( portTickType ) 0 )) == pdTRUE)
 			{
 #ifdef PRINT_LOG
                 ESP_LOGI(TAG, "\tUART%d value CONSUMED on queue: %s ", UARTNUM, rxmesage);
