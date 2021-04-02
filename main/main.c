@@ -5,9 +5,11 @@
 #include "string.h"
 #include "driver/uart.h"
 #include "driver/gpio.h"
+#include "esp_log.h"
 
-#define BUF 1024
-#define BUF_SIZE (1024)
+#define BUF 512
+#define BUF_SIZE (128)
+static const char *TAG = "uart_test";
 
 xQueueHandle xQueueUart1Event;
 xQueueHandle xQueueUart2Event;
@@ -46,15 +48,14 @@ void uart1_task(void *pvParameter)
     const int UARTNUM = 1;
     char* rxmesage;
     char* repl_data = "";
-    setup_muxed_uarts(UARTNUM, 18);
     while(1){
     	if( xQueueUart1Event != 0 ) {
 			if( (xQueueReceive( xQueueUart1Data, &( rxmesage ), ( portTickType ) 10 )) == pdTRUE)
 			{
-                printf("\tUART%d value CONSUMED on queue: %s \n", UARTNUM, rxmesage);
+                ESP_LOGI(TAG, "\tUART%d value CONSUMED on queue: %s ", UARTNUM, rxmesage);
                 repl_data = "MULUART-1-STATUS";
+                ESP_LOGI(TAG, "\tUART%d REPLY send: %s  ",UARTNUM, repl_data);
                 xQueueSend(xQueueUart1Event,(void *)&repl_data,(TickType_t )0); 
-                printf("\tUART%d REPLY send: %s  \n",UARTNUM, repl_data);
                 uart_write_bytes(UARTNUM, (const char *)rxmesage, 10);
                 uart_wait_tx_done(UARTNUM, 2);
                 vTaskDelay(500/portTICK_PERIOD_MS); //wait for 500 ms
@@ -68,15 +69,14 @@ void uart2_task(void *pvParameter)
     const int UARTNUM = 2;
     char* rxmesage;
     char* repl_data = "";
-    setup_muxed_uarts(UARTNUM, 18);
     while(1){
     	if( xQueueUart1Event != 0 ) {
 			if( (xQueueReceive( xQueueUart2Data, &( rxmesage ), ( portTickType ) 10 )) == pdTRUE)
 			{
-                printf("\tUART%d value CONSUMED on queue: %s  \n", UARTNUM, rxmesage);
+                ESP_LOGI(TAG, "\tUART%d value CONSUMED on queue: %s ", UARTNUM, rxmesage);
                 repl_data = "MULUART-2-STATUS";
+                ESP_LOGI(TAG, "\tUART%d REPLY send: %s  ",UARTNUM, repl_data);
                 xQueueSend(xQueueUart2Event,(void *)&repl_data,(TickType_t )0); 
-                printf("\tUART%d REPLY send: %s  \n",UARTNUM, repl_data);
                 uart_write_bytes(UARTNUM, (const char *)rxmesage, 10);
                 uart_wait_tx_done(UARTNUM, 2);
                 vTaskDelay(500/portTICK_PERIOD_MS); //wait for 500 ms
@@ -98,17 +98,17 @@ void routing_task(void *pvParameter){
         asprintf(&repl_data2,"%s %d",mydata2, count);
 
         if( (xQueueReceive( xQueueUart1Event, &( rxmesage ), ( portTickType ) 10 )) == pdTRUE) {
-            printf("\tROUTING - value consumed on queue: %s \n",rxmesage);
+            ESP_LOGI(TAG, "\tROUTING - value consumed on queue: %s ",rxmesage);
         }
         if( (xQueueReceive( xQueueUart2Event, &( rxmesage ), ( portTickType ) 10 )) == pdTRUE) {
-            printf("\tROUTING - value consumed on queue: %s \n",rxmesage);
+            ESP_LOGI(TAG, "\tROUTING - value consumed on queue: %s ",rxmesage);
         }
         if((count % 20) == 0){
-            printf("value sent on queue: %s \n",repl_data1);
+            ESP_LOGI(TAG, "value sent on xQueueUart1Data: %s ",repl_data1);
             xQueueSend(xQueueUart1Data,(void *)&repl_data1,(TickType_t )0); 
         }
         if((count % 20) == 1){
-            printf("value sent on queue: %s \n",repl_data2);
+            ESP_LOGI(TAG, "value sent on xQueueUart1Data: %s ",repl_data2);
             xQueueSend(xQueueUart2Data,(void *)&repl_data2,(TickType_t )0); 
         }
         vTaskDelay(50/portTICK_PERIOD_MS); //wait for a second
@@ -118,15 +118,18 @@ void routing_task(void *pvParameter){
 
 void app_main()
 {
-	xQueueUart1Event = xQueueCreate( 10, BUF);
-	xQueueUart2Event = xQueueCreate( 10, BUF);
-	xQueueUart1Data = xQueueCreate( 10, BUF);
-	xQueueUart2Data = xQueueCreate( 10, BUF);
-    printf("Queue is created\n");
+	uint8_t* dataSerial = (uint8_t*) malloc(BUF);
+	xQueueUart1Event = xQueueCreate( 10, sizeof(dataSerial));
+	xQueueUart2Event = xQueueCreate( 10, sizeof(dataSerial));
+	xQueueUart1Data = xQueueCreate( 10, sizeof(dataSerial));
+	xQueueUart2Data = xQueueCreate( 10, sizeof(dataSerial));
+    ESP_LOGI(TAG, "Queue is created");
+    setup_muxed_uarts(1, 18);
+    setup_muxed_uarts(2, 19);
     vTaskDelay(1000/portTICK_PERIOD_MS); //wait for a second
-    xTaskCreate(&routing_task,"routing_task",1024*4,NULL,5,NULL);
-    printf("routing_task task  started\n");
+    xTaskCreate(&routing_task,"routing_task",1024,NULL,5,NULL);
+    ESP_LOGI(TAG, "routing_task task  started");
     xTaskCreate(&uart1_task,"uart1_task",1024*4,NULL,10,NULL);
     xTaskCreate(&uart2_task,"uart2_task",1024*4,NULL,10,NULL);
-    printf("uart_task task  started\n");
+    ESP_LOGI(TAG, "uart_task task  started");
 }
