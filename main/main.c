@@ -6,9 +6,10 @@
 #include "driver/uart.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
+#include <sys/time.h>
 
 #define BUF 512
-#define BUF_SIZE (128)
+#define BUF_SIZE (1024)
 static const char *TAG = "uart_test";
 
 xQueueHandle xQueueUart1Event;
@@ -58,7 +59,7 @@ void uart1_task(void *pvParameter)
                 xQueueSend(xQueueUart1Event,(void *)&repl_data,(TickType_t )0); 
                 uart_write_bytes(UARTNUM, (const char *)rxmesage, 10);
                 uart_wait_tx_done(UARTNUM, 2);
-                vTaskDelay(500/portTICK_PERIOD_MS); //wait for 500 ms
+//                vTaskDelay(500/portTICK_PERIOD_MS); //wait for 500 ms
 			}
         }
     }
@@ -79,7 +80,7 @@ void uart2_task(void *pvParameter)
                 xQueueSend(xQueueUart2Event,(void *)&repl_data,(TickType_t )0); 
                 uart_write_bytes(UARTNUM, (const char *)rxmesage, 10);
                 uart_wait_tx_done(UARTNUM, 2);
-                vTaskDelay(500/portTICK_PERIOD_MS); //wait for 500 ms
+//                vTaskDelay(500/portTICK_PERIOD_MS); //wait for 500 ms
 			}
         }
     }
@@ -92,6 +93,8 @@ void routing_task(void *pvParameter){
     char  *repl_data2="";
     int count=0;
     char* rxmesage;
+    struct timeval tv_now;
+    int64_t start=0, diff=0;
 
     while(1){
         asprintf(&repl_data1,"%s %d",mydata1, count);
@@ -103,16 +106,22 @@ void routing_task(void *pvParameter){
         if( (xQueueReceive( xQueueUart2Event, &( rxmesage ), ( portTickType ) 10 )) == pdTRUE) {
             ESP_LOGI(TAG, "\tROUTING - value consumed on queue: %s ",rxmesage);
         }
-        if((count % 20) == 0){
+        if((count % 2) == 0){
             ESP_LOGI(TAG, "value sent on xQueueUart1Data: %s ",repl_data1);
             xQueueSend(xQueueUart1Data,(void *)&repl_data1,(TickType_t )0); 
         }
-        if((count % 20) == 1){
+        if((count % 2) == 1){
             ESP_LOGI(TAG, "value sent on xQueueUart1Data: %s ",repl_data2);
             xQueueSend(xQueueUart2Data,(void *)&repl_data2,(TickType_t )0); 
         }
-        vTaskDelay(50/portTICK_PERIOD_MS); //wait for a second
+        start = esp_timer_get_time();
+//        vTaskDelay(2/portTICK_PERIOD_MS); //wait for a second
+        gettimeofday(&tv_now, NULL);
+        ESP_LOGI(TAG, "time: %ld %ld count=%d",tv_now.tv_sec, tv_now.tv_usec/1000, count);
+        ESP_LOGI(TAG, " diff=%d    ",(int)diff);
+        
         count++;
+        diff = esp_timer_get_time() - start;
     }
 }
 
@@ -127,9 +136,9 @@ void app_main()
     setup_muxed_uarts(1, 18);
     setup_muxed_uarts(2, 19);
     vTaskDelay(1000/portTICK_PERIOD_MS); //wait for a second
-    xTaskCreate(&routing_task,"routing_task",1024,NULL,5,NULL);
+    xTaskCreate(&routing_task,"routing_task",1024*8,NULL,1,NULL);
     ESP_LOGI(TAG, "routing_task task  started");
-    xTaskCreate(&uart1_task,"uart1_task",1024*4,NULL,10,NULL);
-    xTaskCreate(&uart2_task,"uart2_task",1024*4,NULL,10,NULL);
+    xTaskCreate(&uart1_task,"uart1_task",1024*8,NULL,1,NULL);
+    xTaskCreate(&uart2_task,"uart2_task",1024*8,NULL,1,NULL);
     ESP_LOGI(TAG, "uart_task task  started");
 }
