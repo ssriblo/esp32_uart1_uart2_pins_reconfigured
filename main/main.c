@@ -8,11 +8,24 @@
 #include "esp_log.h"
 #include <sys/time.h>
 
+#define PRINT_TIME 1
+#undef  PRINT_TIME
+
 #define BUF 512
 #define BUF_SIZE (1024)
 
 #define UART_STATUS_BUSY "BUSY"
 #define UART_STATUS_FREE "FREE"
+
+// Set following wait values ZERO for release
+// But set > 0 for debugging
+#define ROUTE_QUEUE_WAIT    5
+#define UART_QUEUE_WAIT     5
+
+typedef enum {
+    UART1 = 1,
+    UART2 = 2,
+} uart_num_t;
 
 static const char *TAG = "uart_test";
 
@@ -40,12 +53,12 @@ void setup_muxed_uarts(int uart_num, int pin){
 
 void uart1_task(void *pvParameter)
 {
-    const int UARTNUM = 1;
+    const uart_num_t UARTNUM = UART1;
     char* rxmesage;
     char* repl_data = UART_STATUS_BUSY;
     while(1){
     	if( xQueueUart1Data != 0 ) {
-			if( (xQueueReceive( xQueueUart1Data, &( rxmesage ), ( portTickType ) 0 )) == pdTRUE)
+			if( (xQueueReceive( xQueueUart1Data, &( rxmesage ), ( portTickType ) UART_QUEUE_WAIT )) == pdTRUE)
 			{
                 ESP_LOGI(TAG, "\tUART%d value CONSUMED on queue: %s ", UARTNUM, rxmesage);
                 ESP_LOGI(TAG, "\tUART%d REPLY send: %s  ",UARTNUM, repl_data);
@@ -60,19 +73,19 @@ void uart1_task(void *pvParameter)
 
 void uart2_task(void *pvParameter)
 {
-    const int UARTNUM = 2;
+    const uart_num_t UARTNUM = UART2;
     char* rxmesage;
     char* repl_data = UART_STATUS_BUSY;
     while(1){
     	if( xQueueUart2Data != 0 ) {
-			if( (xQueueReceive( xQueueUart2Data, &( rxmesage ), ( portTickType ) 0 )) == pdTRUE)
+			if( (xQueueReceive( xQueueUart2Data, &( rxmesage ), ( portTickType ) UART_QUEUE_WAIT )) == pdTRUE)
 			{
                 ESP_LOGI(TAG, "\tUART%d value CONSUMED on queue: %s ", UARTNUM, rxmesage);
                 repl_data = UART_STATUS_BUSY;
                 uart_write_bytes(UARTNUM, (const char *)rxmesage, 10);
                 uart_wait_tx_done(UARTNUM, 2);
                 repl_data = UART_STATUS_FREE;
-                xQueueSend(xQueueUart1Event,(void *)&repl_data,(TickType_t )0); 
+                xQueueSend(xQueueUart2Event,(void *)&repl_data,(TickType_t )0); 
 			}
         }
     }
@@ -86,35 +99,59 @@ void routing_task(void *pvParameter){
     int count=0;
     char* rxmesage;
     struct timeval tv_now;
+    char* strFree = UART_STATUS_FREE;
+#ifdef PRINT_TIME
     int64_t start=0, diff1=0, diff2=0;
-    isUartBusy[2] = {0}; // set to 1 when UART busy
+#endif
+    int isUartBusy[2] = {0}; // set to 1 when UART busy
+//    uart_num_t uartToSend;
 
     while(1){
+#ifdef PRINT_TIME
         start = esp_timer_get_time();
+#endif
         asprintf(&repl_data1,"%s %d",mydata1, count);
         asprintf(&repl_data2,"%s %d",mydata2, count);
 
-        if( (xQueueReceive( xQueueUart1Event, &( rxmesage ), ( portTickType ) 0 )) == pdTRUE) {
-            ESP_LOGI(TAG, "\tROUTING - value consumed on queue: %s ",rxmesage);
+        if( (xQueueReceive( xQueueUart1Event, &( rxmesage ), ( portTickType ) ROUTE_QUEUE_WAIT )) == pdTRUE) {
+            ESP_LOGI(TAG, "\tROUTING - UART1 value consumed on queue: %s",rxmesage);
+            if (strcmp(rxmesage, strFree) == 0) {
+                isUartBusy[0] = 0;
+                ESP_LOGI(TAG, "\tROUTING - UART1: STRCPM PASS");
+            }
         }
-        if( (xQueueReceive( xQueueUart2Event, &( rxmesage ), ( portTickType ) 0 )) == pdTRUE) {
-            ESP_LOGI(TAG, "\tROUTING - value consumed on queue: %s ",rxmesage);
+        if( (xQueueReceive( xQueueUart2Event, &( rxmesage ), ( portTickType ) ROUTE_QUEUE_WAIT )) == pdTRUE) {
+            ESP_LOGI(TAG, "\tROUTING - UART2 value consumed on queue: %s",rxmesage);
+            if (strcmp(rxmesage, strFree) == 0) {
+                isUartBusy[1] = 0;
+                ESP_LOGI(TAG, "\tROUTING - UART2: STRCPM PASS");
+            }
         }
         if((count % 2) == 0){
-            ESP_LOGI(TAG, "value sent on xQueueUart1Data: %s ",repl_data1);
-            xQueueSend(xQueueUart1Data,(void *)&repl_data1,(TickType_t )0); 
+            if(isUartBusy[0] == 0){
+                isUartBusy[0] = 1;
+                ESP_LOGI(TAG, "value sent on xQueueUart1Data: %s ",repl_data1);
+                xQueueSend(xQueueUart1Data,(void *)&repl_data1,(TickType_t )0); 
+            }
         }
         if((count % 2) == 1){
-            ESP_LOGI(TAG, "value sent on xQueueUart1Data: %s ",repl_data2);
-            xQueueSend(xQueueUart2Data,(void *)&repl_data2,(TickType_t )0); 
+            if(isUartBusy[1] == 0){
+                isUartBusy[1] = 1;
+                ESP_LOGI(TAG, "value sent on xQueueUart2Data: %s ",repl_data2);
+                xQueueSend(xQueueUart2Data,(void *)&repl_data2,(TickType_t )0); 
+            }
         }
+#ifdef PRINT_TIME
         diff1 = esp_timer_get_time() - start;
-        vTaskDelay(20/portTICK_PERIOD_MS); //wait for a second
+#endif
+        vTaskDelay(50/portTICK_PERIOD_MS); //wait for a second
         gettimeofday(&tv_now, NULL);
+#ifdef PRINT_TIME
         ESP_LOGI(TAG, "time: %ld %ld count=%d",tv_now.tv_sec, tv_now.tv_usec/1000, count);       
-        count++;
         diff2 = esp_timer_get_time() - start;
         ESP_LOGI(TAG, " diff1=%d  diff2=%d   ",(int)diff1, (int)diff2);
+#endif
+        count++;
     }
 }
 
