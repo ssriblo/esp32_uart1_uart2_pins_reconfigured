@@ -9,3 +9,8 @@ If both UARTs are busy, either return a busy() status or enqueue the message so 
 Build command:
 
  idf.py -p /dev/ttyUSB0 flash monitor 2>&1 | tee log1.txt
+
+Turn off logging prints:
+idf.py menuconfig
+go to "Component config", "Log output", set "Default log verbosity" to "No output".
+
