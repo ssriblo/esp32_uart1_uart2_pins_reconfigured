@@ -168,37 +168,36 @@ void routing_task(void *pvParameter){
 
         if( (xQueueReceive( xQueueTimer, &( rxmesage ), ( portTickType ) ROUTE_QUEUE_WAIT )) == pdTRUE) {
             gettimeofday(&tv_now, NULL);
-            ESP_LOGI(TAG, "\tROUTING - TIMER EXPIRED: %s %ld %ld",rxmesage,tv_now.tv_sec, tv_now.tv_usec/1000);
-        }
+            ESP_LOGI(TAG, "\tROUTING - ***** TIMER EXPIRED ***** %s %ld %ld",rxmesage,tv_now.tv_sec, tv_now.tv_usec/1000);
 
-
-        if((count % 2) == 0){
-            if(isUartBusy[0] == 0){
-                isUartBusy[0] = 1;
-                ESP_LOGI(TAG, "value sent on xQueueUart1Data: %s ",repl_data1);
-                xQueueSend(xQueueUart1Data,(void *)&repl_data1,(TickType_t )0); 
+            if((count % 2) == 0){
+                if(isUartBusy[0] == 0){
+                    isUartBusy[0] = 1;
+                    ESP_LOGI(TAG, "value sent on xQueueUart1Data: %s ",repl_data1);
+                    xQueueSend(xQueueUart1Data,(void *)&repl_data1,(TickType_t )0); 
+                }
             }
-        }
-        if((count % 2) == 1){
-            if(isUartBusy[1] == 0){
-                isUartBusy[1] = 1;
-                ESP_LOGI(TAG, "value sent on xQueueUart2Data: %s ",repl_data2);
-                xQueueSend(xQueueUart2Data,(void *)&repl_data2,(TickType_t )0); 
+            if((count % 2) == 1){
+                if(isUartBusy[1] == 0){
+                    isUartBusy[1] = 1;
+                    ESP_LOGI(TAG, "value sent on xQueueUart2Data: %s ",repl_data2);
+                    xQueueSend(xQueueUart2Data,(void *)&repl_data2,(TickType_t )0); 
+                }
             }
-        }
 #ifdef PRINT_TIME
-        diff1 = esp_timer_get_time() - start;
+            diff1 = esp_timer_get_time() - start;
 #endif
-        vTaskDelay(50/portTICK_PERIOD_MS); //wait for a second
-        gettimeofday(&tv_now, NULL);
+    //        vTaskDelay(50/portTICK_PERIOD_MS); //wait for a second
+            gettimeofday(&tv_now, NULL);
 #ifdef PRINT_TIME
-        ESP_LOGI(TAG, "time: %ld %ld count=%d",tv_now.tv_sec, tv_now.tv_usec/1000, count);       
-        diff2 = esp_timer_get_time() - start;
-        ESP_LOGI(TAG, " diff1=%d  diff2=%d   ",(int)diff1, (int)diff2);
+            ESP_LOGI(TAG, "time: %ld %ld count=%d",tv_now.tv_sec, tv_now.tv_usec/1000, count);       
+            diff2 = esp_timer_get_time() - start;
+            ESP_LOGI(TAG, " diff1=%d  diff2=%d   ",(int)diff1, (int)diff2);
 #endif
-        count++;
-    }
-}
+            count++;
+        } // if( (xQueueReceive( xQueueTimer,...
+    } // while(1) ...
+} // void routing_task(...
 
 void app_main()
 {
