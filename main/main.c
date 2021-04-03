@@ -7,6 +7,9 @@
 #include "driver/gpio.h"
 #include "esp_log.h"
 #include <sys/time.h>
+#include "esp_intr_alloc.h"
+#include "esp_attr.h"
+#include "driver/timer.h"
 
 #define PRINT_TIME 1
 #undef  PRINT_TIME
@@ -27,14 +30,49 @@ typedef enum {
     UART2 = 2,
 } uart_num_t;
 
+static intr_handle_t s_timer_handle;
+
 static const char *TAG = "uart_test";
 
 xQueueHandle xQueueUart1Event;
 xQueueHandle xQueueUart2Event;
 xQueueHandle xQueueUart1Data;
 xQueueHandle xQueueUart2Data;
+xQueueHandle xQueueTimer;
 
 void setup_muxed_uarts(int uart_num, int pin);
+static void timer_isr(void* arg);
+void init_timer(int timer_period_us);
+
+static void timer_isr(void* arg)
+{
+    struct timeval tv_now;
+    char* repl_data = "TIMER";
+    TIMERG0.int_clr_timers.t0 = 1;
+    TIMERG0.hw_timer[0].config.alarm_en = 1;
+    xQueueSend(xQueueTimer,(void *)&repl_data,(TickType_t )0); 
+}
+
+void init_timer(int timer_period_us)
+{
+    timer_config_t config = {
+            .alarm_en = true,
+            .counter_en = false,
+            .intr_type = TIMER_INTR_LEVEL,
+            .counter_dir = TIMER_COUNT_UP,
+            .auto_reload = true,
+            .divider = 80   /* 1 us per tick */
+    };
+    timer_init(TIMER_GROUP_0, TIMER_0, &config);
+    timer_set_counter_value(TIMER_GROUP_0, TIMER_0, 0);
+    timer_set_alarm_value(TIMER_GROUP_0, TIMER_0, timer_period_us);
+    timer_enable_intr(TIMER_GROUP_0, TIMER_0);
+    timer_isr_register(TIMER_GROUP_0, TIMER_0, &timer_isr, NULL, 0, &s_timer_handle);
+
+    timer_start(TIMER_GROUP_0, TIMER_0);
+}
+
+
 
 void setup_muxed_uarts(int uart_num, int pin){
     uart_config_t uart_config = {
@@ -127,6 +165,13 @@ void routing_task(void *pvParameter){
                 ESP_LOGI(TAG, "\tROUTING - UART2: STRCPM PASS");
             }
         }
+
+        if( (xQueueReceive( xQueueTimer, &( rxmesage ), ( portTickType ) ROUTE_QUEUE_WAIT )) == pdTRUE) {
+            gettimeofday(&tv_now, NULL);
+            ESP_LOGI(TAG, "\tROUTING - TIMER EXPIRED: %s %ld %ld",rxmesage,tv_now.tv_sec, tv_now.tv_usec/1000);
+        }
+
+
         if((count % 2) == 0){
             if(isUartBusy[0] == 0){
                 isUartBusy[0] = 1;
@@ -162,6 +207,8 @@ void app_main()
 	xQueueUart2Event = xQueueCreate( 10, sizeof(dataSerial));
 	xQueueUart1Data = xQueueCreate( 10, sizeof(dataSerial));
 	xQueueUart2Data = xQueueCreate( 10, sizeof(dataSerial));
+	xQueueTimer = xQueueCreate( 10, sizeof(dataSerial));
+    
     ESP_LOGI(TAG, "Queue is created");
     setup_muxed_uarts(1, 18);
     setup_muxed_uarts(2, 19);
@@ -171,4 +218,5 @@ void app_main()
     xTaskCreate(&uart1_task,"uart1_task",1024*8,NULL,1,NULL);
     xTaskCreate(&uart2_task,"uart2_task",1024*8,NULL,1,NULL);
     ESP_LOGI(TAG, "uart_task task  started");
+    init_timer(1000000);
 }
