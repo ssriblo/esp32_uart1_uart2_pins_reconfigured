@@ -164,7 +164,9 @@ void routing_task(void *pvParameter){
     int pin;
     char  *repl_data="";
     char* rxmesage;
+#ifdef PRINT_TIME
     struct timeval tv_now;
+#endif
     char* strFree = UART_STATUS_FREE;
     uart_num_t uartnum;
     int isUartBusy[3] = {0}; // set to 1 when UART busy ([0] - is not used!)
@@ -195,9 +197,8 @@ void routing_task(void *pvParameter){
 
         // Let get new message and send to someone of the UARTs
         if( (xQueueReceive( xQueueTimer, &( rxmesage ), ( portTickType ) ROUTE_QUEUE_WAIT )) == pdTRUE) {
-            gettimeofday(&tv_now, NULL);
             pin = pinList[cycle16][1];           
-            ESP_LOGI(TAG, "\tROUTING - ***** TIMER EXPIRED ***** sec=%ld us=%ld cycle16=%d pin=%d",tv_now.tv_sec, tv_now.tv_usec/1000, cycle16, pin);
+            ESP_LOGI(TAG, "\tROUTING - ***** TIMER EXPIRED *****  cycle16=%d pin=%d", cycle16, pin);
             cycle16++;
             cycle16 = cycle16 % MSGNUM;
             asprintf(&repl_data,"%d %s", pin, mydata);
@@ -239,10 +240,7 @@ void routing_task(void *pvParameter){
         } // if( (xQueueReceive( xQueueTimer,...
 #ifdef PRINT_TIME
             diff1 = esp_timer_get_time() - start;
-#endif
-    //        vTaskDelay(50/portTICK_PERIOD_MS); //wait for a second
             gettimeofday(&tv_now, NULL);
-#ifdef PRINT_TIME
             ESP_LOGI(TAG, "time: %ld %ld count=%d",tv_now.tv_sec, tv_now.tv_usec/1000, count);       
             diff2 = esp_timer_get_time() - start;
             ESP_LOGI(TAG, " diff1=%d  diff2=%d   ",(int)diff1, (int)diff2);
