@@ -40,13 +40,13 @@ xQueueHandle xQueueUart1Data;
 xQueueHandle xQueueUart2Data;
 xQueueHandle xQueueTimer;
 
-void setup_muxed_uarts(int uart_num, int pin);
+void setup_muxed_uarts(int uart_num, int pin, int baud_rate);
 static void timer_isr(void* arg);
 void init_timer(int timer_period_us);
 void pinReconfigure(int pin, uart_num_t uartnum);
 
 void pinReconfigure(int pin, uart_num_t uartnum){
-    
+//    ESP_ERROR_CHECK(uart_set_pin(uart_num, pin, 34, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
 }
 
 static void timer_isr(void* arg)
@@ -78,9 +78,9 @@ void init_timer(int timer_period_us)
 
 
 
-void setup_muxed_uarts(int uart_num, int pin){
+void setup_muxed_uarts(int uart_num, int pin, int baud_rate){
     uart_config_t uart_config = {
-        .baud_rate = 9600,
+        .baud_rate = baud_rate,
         .data_bits = UART_DATA_8_BITS,
         .parity    = UART_PARITY_DISABLE,
         .stop_bits = UART_STOP_BITS_1,
@@ -103,9 +103,9 @@ void uart1_task(void *pvParameter)
 			if( (xQueueReceive( xQueueUart1Data, &( rxmesage ), ( portTickType ) UART_QUEUE_WAIT )) == pdTRUE)
 			{
                 ESP_LOGI(TAG, "\tUART%d value CONSUMED on queue: %s ", uartnum, rxmesage);
-                ESP_LOGI(TAG, "\tUART%d REPLY send: %s  ",uartnum, repl_data);
-                uart_write_bytes(uartnum, (const char *)rxmesage, 10);
-                uart_wait_tx_done(uartnum, 2);
+                uart_tx_chars(uartnum, (const char *)rxmesage, 10);
+                uart_wait_tx_idle_polling(uartnum);
+//                uart_wait_tx_done(uartnum, 2);
                 repl_data = UART_STATUS_FREE;
                 xQueueSend(xQueueUart1Event,(void *)&repl_data,(TickType_t )0); 
 			}
@@ -123,9 +123,9 @@ void uart2_task(void *pvParameter)
 			if( (xQueueReceive( xQueueUart2Data, &( rxmesage ), ( portTickType ) UART_QUEUE_WAIT )) == pdTRUE)
 			{
                 ESP_LOGI(TAG, "\tUART%d value CONSUMED on queue: %s ", uartnum, rxmesage);
-                repl_data = UART_STATUS_BUSY;
-                uart_write_bytes(uartnum, (const char *)rxmesage, 10);
-                uart_wait_tx_done(uartnum, 2);
+                uart_tx_chars(uartnum, (const char *)rxmesage, 10);
+                uart_wait_tx_idle_polling(uartnum);
+//                uart_wait_tx_done(uartnum, 2);
                 repl_data = UART_STATUS_FREE;
                 xQueueSend(xQueueUart2Event,(void *)&repl_data,(TickType_t )0); 
 			}
@@ -134,7 +134,7 @@ void uart2_task(void *pvParameter)
 }
 
 void routing_task(void *pvParameter){
-	char *mydata1="ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+	char *mydata="ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     ///////////////////////////////////////////
     // Format:
     // {<Number[0...15]>, <pin>}
@@ -162,14 +162,12 @@ void routing_task(void *pvParameter){
         };
     int cycle16 = 0;
     int pin;
-    char  *repl_data1="";
-    char  *repl_data2="";
-    int count=0;
+    char  *repl_data="";
     char* rxmesage;
     struct timeval tv_now;
     char* strFree = UART_STATUS_FREE;
     uart_num_t uartnum;
-    int isUartBusy[2] = {0}; // set to 1 when UART busy
+    int isUartBusy[3] = {0}; // set to 1 when UART busy ([0] - is not used!)
     int currentPinList[2] = {42};
 
 #ifdef PRINT_TIME
@@ -180,20 +178,18 @@ void routing_task(void *pvParameter){
 #ifdef PRINT_TIME
         start = esp_timer_get_time();
 #endif
-        asprintf(&repl_data1,"%s %d",mydata1, count);
-
         if( (xQueueReceive( xQueueUart1Event, &( rxmesage ), ( portTickType ) ROUTE_QUEUE_WAIT )) == pdTRUE) {
             ESP_LOGI(TAG, "\tROUTING - UART1 value consumed on queue: %s",rxmesage);
+            uartnum = UART1;
             if (strcmp(rxmesage, strFree) == 0) {
-                isUartBusy[0] = 0;
-                ESP_LOGI(TAG, "\tROUTING - UART1: STRCPM PASS");
+                isUartBusy[uartnum] = 0;
             }
         }
         if( (xQueueReceive( xQueueUart2Event, &( rxmesage ), ( portTickType ) ROUTE_QUEUE_WAIT )) == pdTRUE) {
             ESP_LOGI(TAG, "\tROUTING - UART2 value consumed on queue: %s",rxmesage);
+            uartnum = UART2;
             if (strcmp(rxmesage, strFree) == 0) {
-                isUartBusy[1] = 0;
-                ESP_LOGI(TAG, "\tROUTING - UART2: STRCPM PASS");
+                isUartBusy[uartnum] = 0;
             }
         }
 
@@ -204,8 +200,8 @@ void routing_task(void *pvParameter){
             ESP_LOGI(TAG, "\tROUTING - ***** TIMER EXPIRED ***** sec=%ld us=%ld cycle16=%d pin=%d",tv_now.tv_sec, tv_now.tv_usec/1000, cycle16, pin);
             cycle16++;
             cycle16 = cycle16 % MSGNUM;
-            asprintf(&repl_data2,"%d %s", pin, repl_data1);
-            
+            asprintf(&repl_data,"%d %s", pin, mydata);
+
             uartnum = UART1;
             if(isUartBusy[uartnum] == 0){
                 isUartBusy[uartnum] = 1;
@@ -217,18 +213,26 @@ void routing_task(void *pvParameter){
                     currentPinList[uartnum] = pin;
                     pinReconfigure(pin, uartnum);
                 }
-                ESP_LOGI(TAG, "value sent on %d: %s ", uartnum, repl_data2);
-                xQueueSend(xQueueUart1Data,(void *)&repl_data2,(TickType_t )0); 
+                ESP_LOGI(TAG, "ROUTING - value sent on UART-%d: %s ", uartnum, repl_data);
+                xQueueSend(xQueueUart1Data,(void *)&repl_data,(TickType_t )0); 
             }else{
                 uartnum = UART2;
                 if(isUartBusy[uartnum] == 0){
                     isUartBusy[uartnum] = 1;
-                    ESP_LOGI(TAG, "value sent on %d: %s ", uartnum, repl_data2);
-                    xQueueSend(xQueueUart1Data,(void *)&repl_data2,(TickType_t )0); 
+                    if(currentPinList[uartnum] == pin){
+                        // Previous pin for the UART the same as new one
+                        // Nothing to do for reconfiguration
+                    }else{
+                        // Let pin reconfigure 
+                        currentPinList[uartnum] = pin;
+                        pinReconfigure(pin, uartnum);
+                    }
+                    ESP_LOGI(TAG, "ROUTING - value sent on UART-%d: %s ", uartnum, repl_data);
+                    xQueueSend(xQueueUart2Data,(void *)&repl_data,(TickType_t )0); 
                 }else{
                     // Both UARTs are busy
                     // Let ignore this packet. But the better to store packet at the rignbuffer or at the xQueue
-                    ESP_LOGI(TAG, "Both UARTs are busy MSG=%s ", repl_data2);
+                    ESP_LOGI(TAG, "ROUTING - Both UARTs are busy MSG=%s ", repl_data);
                 }
             }
 
@@ -243,7 +247,6 @@ void routing_task(void *pvParameter){
             diff2 = esp_timer_get_time() - start;
             ESP_LOGI(TAG, " diff1=%d  diff2=%d   ",(int)diff1, (int)diff2);
 #endif
-            count++;
     } // while(1) ...
 } // void routing_task(...
 
@@ -257,13 +260,13 @@ void app_main()
 	xQueueTimer = xQueueCreate( 10, sizeof(dataSerial));
     
     ESP_LOGI(TAG, "Queue is created");
-    setup_muxed_uarts(1, 18);
-    setup_muxed_uarts(2, 19);
+    setup_muxed_uarts(1, 18, 600);
+    setup_muxed_uarts(2, 19, 600);
     vTaskDelay(1000/portTICK_PERIOD_MS); //wait for a second
     xTaskCreate(&routing_task,"routing_task",1024*8,NULL,1,NULL);
     ESP_LOGI(TAG, "routing_task task  started");
     xTaskCreate(&uart1_task,"uart1_task",1024*8,NULL,1,NULL);
     xTaskCreate(&uart2_task,"uart2_task",1024*8,NULL,1,NULL);
     ESP_LOGI(TAG, "uart_task task  started");
-    init_timer(1000000);
+    init_timer(10000);
 }
