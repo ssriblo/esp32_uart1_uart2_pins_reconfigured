@@ -35,6 +35,7 @@
 //////////////////////////////////////////////////////////////////////////////////
 
 #define BAUDRATE    9600
+#define WRONGPIN    42
 
 int pinsList[] = {13, 14, 16, 17, 18, 19, 21, 22, 23, 25, 26, 27};
 
@@ -46,7 +47,7 @@ typedef enum {
 static intr_handle_t s_timer_handle;
 
 static const char *TAG = "uart_test";
-static int currentPinList[2] = {42};
+static int currentPinList[2] = {WRONGPIN};
 
 xQueueHandle xQueueUart1Event;
 xQueueHandle xQueueUart2Event;
@@ -92,9 +93,11 @@ void pinReconfigure(int txpin, uart_num_t uartnum){
         // Previous pin for the UART the same as new one
         // Nothing to do for reconfiguration
     }else{
-        // Let reset previous pin
-        gpio_reset_pin(previousTxPin);
-        gpio_set_level(previousTxPin, 1);
+        if(previousTxPin != WRONGPIN){
+            // Let reset previous pin
+            gpio_reset_pin(previousTxPin);
+            gpio_set_level(previousTxPin, 1);
+        }
         currentPinList[uartnum] = txpin;
         ESP_ERROR_CHECK(uart_set_pin(uartnum, txpin, rxpin, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
     }
@@ -196,22 +199,39 @@ void routing_task(void *pvParameter){
     ///////////////////////////////////////////
 #define MSGNUM    16
     int pinMsgList[MSGNUM][2] = { 
-        {0,13},
-        {1,14},
-        {2,16},
-        {3,17},
-        {4,18},
+        // {0,13},
+        // {1,14},
+        // {2,16},
+        // {3,17},
+        // {4,18},
+        // {5,18},
+        // {6,18},
+        // {7,18},
+        // {8,18},
+        // {9,19},
+        // {10,21},
+        // {11,22},
+        // {12,23},
+        // {13,25},
+        // {14,26},
+        // {15,27},
+
+        {0,18},
+        {1,18},
+        {2,19},
+        {3,19},
+        {4,19},
         {5,18},
         {6,18},
         {7,18},
         {8,18},
         {9,19},
-        {10,21},
-        {11,22},
-        {12,23},
-        {13,25},
-        {14,26},
-        {15,27},
+        {10,18},
+        {11,19},
+        {12,18},
+        {13,19},
+        {14,18},
+        {15,19},
         };
     int cycle16 = 0;
     int pin;
@@ -313,5 +333,5 @@ void app_main()
     xTaskCreate(&uart1_task,"uart1_task",1024*8,NULL,1,NULL);
     xTaskCreate(&uart2_task,"uart2_task",1024*8,NULL,1,NULL);
     ESP_LOGI(TAG, "uart_task task  started");
-    init_timer(100*1000);
+    init_timer(1*1000);
 }
