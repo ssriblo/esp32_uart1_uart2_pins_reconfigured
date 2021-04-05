@@ -10,6 +10,7 @@
 #include "esp_intr_alloc.h"
 #include "esp_attr.h"
 #include "driver/timer.h"
+#include "esp_task_wdt.h"
 
 #define PRINT_TIME 1
 #undef  PRINT_TIME
@@ -36,6 +37,7 @@
 
 #define BAUDRATE    9600
 #define WRONGPIN    42
+#define MSGLEN      15
 
 int pinsList[] = {13, 14, 16, 17, 18, 19, 21, 22, 23, 25, 26, 27};
 
@@ -158,8 +160,9 @@ void uart1_task(void *pvParameter)
     	if( xQueueUart1Data != 0 ) {
 			if( (xQueueReceive( xQueueUart1Data, &( rxmesage ), ( portTickType ) UART_QUEUE_WAIT )) == pdTRUE)
 			{
+                esp_task_wdt_reset();  
                 ESP_LOGI(TAG, "\tUART%d value CONSUMED on queue: %s ", uartnum, rxmesage);
-                uart_tx_chars(uartnum, (const char *)rxmesage, 10);
+                uart_tx_chars(uartnum, (const char *)rxmesage, MSGLEN);
                 uart_wait_tx_idle_polling(uartnum);
 //                uart_wait_tx_done(uartnum, 2);
                 repl_data = UART_STATUS_FREE;
@@ -178,8 +181,9 @@ void uart2_task(void *pvParameter)
     	if( xQueueUart2Data != 0 ) {
 			if( (xQueueReceive( xQueueUart2Data, &( rxmesage ), ( portTickType ) UART_QUEUE_WAIT )) == pdTRUE)
 			{
+                esp_task_wdt_reset();  
                 ESP_LOGI(TAG, "\tUART%d value CONSUMED on queue: %s ", uartnum, rxmesage);
-                uart_tx_chars(uartnum, (const char *)rxmesage, 10);
+                uart_tx_chars(uartnum, (const char *)rxmesage, MSGLEN);
                 uart_wait_tx_idle_polling(uartnum);
 //                uart_wait_tx_done(uartnum, 2);
                 repl_data = UART_STATUS_FREE;
@@ -190,7 +194,7 @@ void uart2_task(void *pvParameter)
 }
 
 void routing_task(void *pvParameter){
-	char *mydata="ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+	char *mydata="ABCDEFGHIJ";
     ///////////////////////////////////////////
     // Format:
     // {<Number[0...15]>, <pin>}
@@ -273,7 +277,7 @@ void routing_task(void *pvParameter){
             ESP_LOGI(TAG, "\tROUTING - ***** TIMER EXPIRED *****  cycle16=%d pin=%d", cycle16, pin);
             cycle16++;
             cycle16 = cycle16 % MSGNUM;
-            asprintf(&repl_data,"%d %s", pin, mydata);
+            asprintf(&repl_data,"%d %s %d", pin, mydata, cycle16);
 //#if 0
             uartnum = UART1;
             if( (isUartBusy[uartnum] == 0)  && (currentPinList[UART2] != pin) ){

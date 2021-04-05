@@ -10,7 +10,12 @@ Build command:
 
  idf.py -p /dev/ttyUSB0 flash monitor 2>&1 | tee log1.txt
 
-Turn off logging prints:
-idf.py menuconfig
-go to "Component config", "Log output", set "Default log verbosity" to "No output".
+Turn on logging prints - comment this line at the app_main():
+    esp_log_level_set(TAG, ESP_LOG_NONE);     // Disabe local log
+
+Test string at the routing_task() function 
+	char *mydata="ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+String to sent - 16 variants at the loop:
+<pin><blank>mydata<blank><cycleN [0...15]>    
+
 
