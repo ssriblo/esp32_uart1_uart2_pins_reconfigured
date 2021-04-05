@@ -337,5 +337,5 @@ void app_main()
     xTaskCreate(&uart1_task,"uart1_task",1024*8,NULL,1,NULL);
     xTaskCreate(&uart2_task,"uart2_task",1024*8,NULL,1,NULL);
     ESP_LOGI(TAG, "uart_task task  started");
-    init_timer(1*1000);
+    init_timer(20*1000);
 }
