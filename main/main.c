@@ -37,7 +37,7 @@
 
 #define BAUDRATE    9600
 #define WRONGPIN    42
-#define MSGLEN      15
+#define MSGLEN      16
 
 int pinsList[] = {13, 14, 16, 17, 18, 19, 21, 22, 23, 25, 26, 27};
 
@@ -277,7 +277,7 @@ void routing_task(void *pvParameter){
             ESP_LOGI(TAG, "\tROUTING - ***** TIMER EXPIRED *****  cycle16=%d pin=%d", cycle16, pin);
             cycle16++;
             cycle16 = cycle16 % MSGNUM;
-            asprintf(&repl_data,"%d %s %d", pin, mydata, cycle16);
+            asprintf(&repl_data,"%d %s %02d", pin, mydata, cycle16);
 //#if 0
             uartnum = UART1;
             if( (isUartBusy[uartnum] == 0)  && (currentPinList[UART2] != pin) ){
@@ -319,7 +319,7 @@ void app_main()
 	xQueueUart2Data = xQueueCreate( 10, sizeof(dataSerial));
 	xQueueTimer = xQueueCreate( 10, sizeof(dataSerial));
     ESP_LOGI(TAG, "Queue is created");
-    esp_log_level_set(TAG, ESP_LOG_NONE);     // Disabe local log
+//    esp_log_level_set(TAG, ESP_LOG_NONE);     // Disabe local log
     esp_log_level_set("gpio", ESP_LOG_NONE);  // Disable log at GPIO module when pin resets
 
 //    setup_gpio();
