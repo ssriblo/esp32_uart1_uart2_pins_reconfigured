@@ -123,7 +123,10 @@ static void timer_isr(void* arg)
     char* repl_data = "TIMER";
     TIMERG0.int_clr_timers.t0 = 1;
     TIMERG0.hw_timer[0].config.alarm_en = 1;
-    xQueueSend(xQueueTimer,(void *)&repl_data,(TickType_t )0); 
+    int emptySpaces = uxQueueSpacesAvailable(xQueueTimer);
+    if(emptySpaces > 0){
+        xQueueSend(xQueueTimer,(void *)&repl_data,(TickType_t )0); 
+    }
 }
 
 void init_timer(int timer_period_us)
@@ -171,10 +174,9 @@ void uart1_task(void *pvParameter)
 			if( (xQueueReceive( xQueueUart1Data, &( rxmesage ), ( portTickType ) UART_QUEUE_WAIT )) == pdTRUE)
 			{
                 esp_task_wdt_reset();  
-                ESP_LOGI(TAG, "\tUART%d value CONSUMED on queue: %s ", uartnum, rxmesage);
+                ESP_LOGI(TAG, "\tUART%d SEND: %s ", uartnum, rxmesage);
                 uart_tx_chars(uartnum, (const char *)rxmesage, MSGLEN);
                 uart_wait_tx_idle_polling(uartnum);
-//                uart_wait_tx_done(uartnum, 2);
                 repl_data = UART_STATUS_FREE;
                 xQueueSend(xQueueUart1Event,(void *)&repl_data,(TickType_t )0); 
 			}
@@ -193,10 +195,9 @@ void uart2_task(void *pvParameter)
 			if( (xQueueReceive( xQueueUart2Data, &( rxmesage ), ( portTickType ) UART_QUEUE_WAIT )) == pdTRUE)
 			{
                 esp_task_wdt_reset();  
-                ESP_LOGI(TAG, "\tUART%d value CONSUMED on queue: %s ", uartnum, rxmesage);
+                ESP_LOGI(TAG, "\tUART%d SEND: %s ", uartnum, rxmesage);
                 uart_tx_chars(uartnum, (const char *)rxmesage, MSGLEN);
                 uart_wait_tx_idle_polling(uartnum);
-//                uart_wait_tx_done(uartnum, 2);
                 repl_data = UART_STATUS_FREE;
                 xQueueSend(xQueueUart2Event,(void *)&repl_data,(TickType_t )0); 
 			}
@@ -250,7 +251,6 @@ void routing_task(void *pvParameter){
         };
     int cycle16 = 0;
     int pin;
-    char  *repl_data="";
     char* rxmesage;
 #ifdef PRINT_TIME
     struct timeval tv_now;
@@ -287,8 +287,7 @@ void routing_task(void *pvParameter){
         if( (xQueueReceive( xQueueTimer, &( rxmesage ), ( portTickType ) ROUTE_QUEUE_WAIT )) == pdTRUE) {
             pin = pinMsgList[cycle16][1];           
             ESP_LOGI(TAG, "\tROUTING - ***** TIMER EXPIRED *****  cycle16=%d pin=%d", cycle16, pin);
-            cycle16++;
-            cycle16 = cycle16 % MSGNUM;
+            char  *repl_data="";
             asprintf(&repl_data,"%d %s %02d", pin, mydata, cycle16);
 //#if 0
             uartnum = UART1;
@@ -311,6 +310,9 @@ void routing_task(void *pvParameter){
                 }
             }
 //#endif
+            cycle16++;
+            cycle16 = cycle16 % MSGNUM;
+            free(repl_data);
         } // if( (xQueueReceive( xQueueTimer,...
 #ifdef PRINT_TIME
             diff1 = esp_timer_get_time() - start;
@@ -331,7 +333,7 @@ void app_main()
 	xQueueUart2Data = xQueueCreate( 10, sizeof(dataSerial));
 	xQueueTimer = xQueueCreate( 10, sizeof(dataSerial));
     ESP_LOGI(TAG, "Queue is created");
-//    esp_log_level_set(TAG, ESP_LOG_NONE);     // Disabe local log
+    esp_log_level_set(TAG, ESP_LOG_NONE);     // Disabe local log
     esp_log_level_set("gpio", ESP_LOG_NONE);  // Disable log at GPIO module when pin resets
 
 //    setup_gpio();
@@ -340,8 +342,6 @@ void app_main()
     // Let setup all pins for output with high level. It help to switch UART's pin without low level break issue
     for(int i=0; i<sizeof(pinsList)/sizeof(pinsList[0]); i++){
         gpio_set_level(pinsList[i], 1);
-        // ESP_ERROR_CHECK(uart_set_pin(UART1, pinsList[i], RXPINUART1, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
-        // ESP_ERROR_CHECK(uart_set_pin(UART2, pinsList[i], RXPINUART2, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
     }
     vTaskDelay(1000/portTICK_PERIOD_MS); //wait for a second
     xTaskCreate(&routing_task,"routing_task",1024*8,NULL,1,NULL);
