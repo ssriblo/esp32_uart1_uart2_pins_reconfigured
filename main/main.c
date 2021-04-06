@@ -11,6 +11,8 @@
 #include "esp_attr.h"
 #include "driver/timer.h"
 #include "esp_task_wdt.h"
+#include "soc/timer_group_struct.h"
+#include "soc/timer_group_reg.h"
 
 #define PRINT_TIME 1
 #undef  PRINT_TIME
@@ -26,8 +28,8 @@
 
 // Set following wait values ZERO for release
 // But set > 0 for debugging
-#define ROUTE_QUEUE_WAIT    1
-#define UART_QUEUE_WAIT     1
+#define ROUTE_QUEUE_WAIT    0
+#define UART_QUEUE_WAIT     0
 
 /////////  FOR TEST ONLY !! /////////////////////////////////////////////////////
 #define GPIO_OUTPUT_IO_0    23
@@ -62,6 +64,16 @@ static void timer_isr(void* arg);
 void init_timer(int timer_period_us);
 void pinReconfigure(int pin, uart_num_t uartnum);
 void setup_gpio();
+void feedTheDog();
+
+void feedTheDog(){
+  TIMERG0.wdt_wprotect=TIMG_WDT_WKEY_VALUE; // write enable
+  TIMERG0.wdt_feed=1;                       // feed dog
+  TIMERG0.wdt_wprotect=0;                   // write protect
+  TIMERG1.wdt_wprotect=TIMG_WDT_WKEY_VALUE; // write enable
+  TIMERG1.wdt_feed=1;                       // feed dog
+  TIMERG1.wdt_wprotect=0;                   // write protect
+}
 
 void setup_gpio(){
     uint64_t pin_bit_mask = 0;          /*!< GPIO pin: set with bit mask, each bit maps to a GPIO */
@@ -157,6 +169,7 @@ void uart1_task(void *pvParameter)
     char* rxmesage;
     char* repl_data = UART_STATUS_BUSY;
     while(1){
+        feedTheDog();
     	if( xQueueUart1Data != 0 ) {
 			if( (xQueueReceive( xQueueUart1Data, &( rxmesage ), ( portTickType ) UART_QUEUE_WAIT )) == pdTRUE)
 			{
@@ -178,6 +191,7 @@ void uart2_task(void *pvParameter)
     char* rxmesage;
     char* repl_data = UART_STATUS_BUSY;
     while(1){
+        feedTheDog();
     	if( xQueueUart2Data != 0 ) {
 			if( (xQueueReceive( xQueueUart2Data, &( rxmesage ), ( portTickType ) UART_QUEUE_WAIT )) == pdTRUE)
 			{
@@ -256,6 +270,7 @@ void routing_task(void *pvParameter){
 #ifdef PRINT_TIME
         start = esp_timer_get_time();
 #endif
+        feedTheDog();
         if( (xQueueReceive( xQueueUart1Event, &( rxmesage ), ( portTickType ) ROUTE_QUEUE_WAIT )) == pdTRUE) {
             ESP_LOGI(TAG, "\tROUTING - UART1 value consumed on queue: %s",rxmesage);
             uartnum = UART1;
