@@ -14,8 +14,10 @@ Turn on logging prints - comment this line at the app_main():
     esp_log_level_set(TAG, ESP_LOG_NONE);     // Disabe local log
 
 Test string at the routing_task() function 
-	char *mydata="ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-String to sent - 16 variants at the loop:
-<pin><blank>mydata<blank><cycleN [0...15]>    
+	char *mydata="ABCDEFGHIJ";
+String Format to sent - 16 variants at the loop. Loop counter is "cycle16"=[0...15]:
+<pin-msb><pin-lsb><blank><cycle16-msb><cycle16-lsb><blank><mydata>
 
+Pin number hardcoded at the array:
+    pinMsgList[0...15][1]
 
