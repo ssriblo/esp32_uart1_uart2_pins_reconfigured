@@ -124,9 +124,6 @@ static void timer_isr(void* arg)
     TIMERG0.int_clr_timers.t0 = 1;
     TIMERG0.hw_timer[0].config.alarm_en = 1;
     xQueueSend(xQueueTimer,(void *)&repl_data,(TickType_t )0); 
-//    static int cnt = 0;
-//    cnt++;
-//    gpio_set_level(23, cnt % 2);
 }
 
 void init_timer(int timer_period_us)
@@ -272,14 +269,14 @@ void routing_task(void *pvParameter){
 #endif
         feedTheDog();
         if( (xQueueReceive( xQueueUart1Event, &( rxmesage ), ( portTickType ) ROUTE_QUEUE_WAIT )) == pdTRUE) {
-            ESP_LOGI(TAG, "\tROUTING - UART1 value consumed on queue: %s",rxmesage);
+//            ESP_LOGI(TAG, "\tROUTING - UART1 value consumed on queue: %s",rxmesage);
             uartnum = UART1;
             if (strcmp(rxmesage, strFree) == 0) {
                 isUartBusy[uartnum] = 0;
             }
         }
         if( (xQueueReceive( xQueueUart2Event, &( rxmesage ), ( portTickType ) ROUTE_QUEUE_WAIT )) == pdTRUE) {
-            ESP_LOGI(TAG, "\tROUTING - UART2 value consumed on queue: %s",rxmesage);
+//            ESP_LOGI(TAG, "\tROUTING - UART2 value consumed on queue: %s",rxmesage);
             uartnum = UART2;
             if (strcmp(rxmesage, strFree) == 0) {
                 isUartBusy[uartnum] = 0;
@@ -352,5 +349,5 @@ void app_main()
     xTaskCreate(&uart1_task,"uart1_task",1024*8,NULL,1,NULL);
     xTaskCreate(&uart2_task,"uart2_task",1024*8,NULL,1,NULL);
     ESP_LOGI(TAG, "uart_task task  started");
-    init_timer(20*1000);
+    init_timer(10*1000);
 }
