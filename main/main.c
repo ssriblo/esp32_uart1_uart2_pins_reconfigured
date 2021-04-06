@@ -39,7 +39,7 @@
 
 #define BAUDRATE    9600
 #define WRONGPIN    42
-#define MSGLEN      16
+#define MSGLEN      17
 
 int pinsList[] = {13, 14, 16, 17, 18, 19, 21, 22, 23, 25, 26, 27};
 
@@ -171,7 +171,7 @@ void uart1_task(void *pvParameter)
 			if( (xQueueReceive( xQueueUart1Data, &( rxmesage ), ( portTickType ) UART_QUEUE_WAIT )) == pdTRUE)
 			{
                 esp_task_wdt_reset();  
-                ESP_LOGI(TAG, "\tUART%d value CONSUMED on queue: %s ", uartnum, rxmesage);
+                ESP_LOGI(TAG, "\tUART%d msg SEND: %s ", uartnum, rxmesage);
                 uart_tx_chars(uartnum, (const char *)rxmesage, MSGLEN);
                 uart_wait_tx_idle_polling(uartnum);
 //                uart_wait_tx_done(uartnum, 2);
@@ -193,7 +193,7 @@ void uart2_task(void *pvParameter)
 			if( (xQueueReceive( xQueueUart2Data, &( rxmesage ), ( portTickType ) UART_QUEUE_WAIT )) == pdTRUE)
 			{
                 esp_task_wdt_reset();  
-                ESP_LOGI(TAG, "\tUART%d value CONSUMED on queue: %s ", uartnum, rxmesage);
+                ESP_LOGI(TAG, "\tUART%d msg SEND: %s ", uartnum, rxmesage);
                 uart_tx_chars(uartnum, (const char *)rxmesage, MSGLEN);
                 uart_wait_tx_idle_polling(uartnum);
 //                uart_wait_tx_done(uartnum, 2);
@@ -250,7 +250,7 @@ void routing_task(void *pvParameter){
         };
     int cycle16 = 0;
     int pin;
-    char  *repl_data="";
+//    char  *repl_data="";
     char* rxmesage;
 #ifdef PRINT_TIME
     struct timeval tv_now;
@@ -258,6 +258,8 @@ void routing_task(void *pvParameter){
     char* strFree = UART_STATUS_FREE;
     uart_num_t uartnum;
     int isUartBusy[3] = {0}; // set to 1 when UART busy ([0] - is not used!)
+    char * new_str1 = NULL;
+    char * new_str2 = NULL;
 
 #ifdef PRINT_TIME
     int64_t start=0, diff1=0, diff2=0;
@@ -287,30 +289,61 @@ void routing_task(void *pvParameter){
         if( (xQueueReceive( xQueueTimer, &( rxmesage ), ( portTickType ) ROUTE_QUEUE_WAIT )) == pdTRUE) {
             pin = pinMsgList[cycle16][1];           
             ESP_LOGI(TAG, "\tROUTING - ***** TIMER EXPIRED *****  cycle16=%d pin=%d", cycle16, pin);
-            cycle16++;
-            cycle16 = cycle16 % MSGNUM;
-            asprintf(&repl_data,"%d %s %02d", pin, mydata, cycle16);
-//#if 0
+            char info_str[] = "00 00 ";
+            info_str[0] = (pin / 10) + 0x30; // + ascii "0"
+            info_str[1] = (pin % 10) + 0x30; // + ascii "0"
+            info_str[3] = (cycle16 / 10) + 0x30;
+            info_str[4] = (cycle16 % 10) + 0x30;
+
             uartnum = UART1;
             if( (isUartBusy[uartnum] == 0)  && (currentPinList[UART2] != pin) ){
                 isUartBusy[uartnum] = 1;
                 pinReconfigure(pin, uartnum);
-                ESP_LOGI(TAG, "ROUTING - value sent on UART-%d: %s ", uartnum, repl_data);
-                xQueueSend(xQueueUart1Data,(void *)&repl_data,(TickType_t )0); 
+
+                if(new_str1 != NULL){
+                    free(new_str1);
+                }
+                // Output string format is: 
+                // <pin-msb><pin-lsb><blank><cycle16-msb><cycle16-lsb><blank><mydata>
+                if((new_str1 = malloc(strlen(info_str)+strlen(mydata)+1)) != NULL){
+                    new_str1[0] = '\0';   // ensures the memory is an empty string
+                    strcat(new_str1,info_str);
+                    strcat(new_str1,mydata);
+                } else {
+                    ESP_LOGI(TAG, "************ malloc failed!\n");
+                }
+
+                ESP_LOGI(TAG, "ROUTING - value sent on UART-%d: %s ", uartnum, new_str1);
+                xQueueSend(xQueueUart1Data,(void *)&new_str1,(TickType_t )0); 
             }else{
                 uartnum = UART2;
                     if( (isUartBusy[uartnum] == 0)  && (currentPinList[UART1] != pin) ){
                     isUartBusy[uartnum] = 1;
                     pinReconfigure(pin, uartnum);
-                    ESP_LOGI(TAG, "ROUTING - value sent on UART-%d: %s ", uartnum, repl_data);
-                    xQueueSend(xQueueUart2Data,(void *)&repl_data,(TickType_t )0); 
+
+                    if(new_str2 != NULL){
+                        free(new_str2);
+                    }
+                    // Output string format is: 
+                    // <pin-msb><pin-lsb><blank><cycle16-msb><cycle16-lsb><blank><mydata>
+                    if((new_str2 = malloc(strlen(info_str)+strlen(mydata)+1)) != NULL){
+                        new_str2[0] = '\0';   // ensures the memory is an empty string
+                        strcat(new_str2,info_str);
+                        strcat(new_str2,mydata);
+                    } else {
+                        ESP_LOGI(TAG, "************ malloc failed!\n");
+                    }
+
+                    ESP_LOGI(TAG, "ROUTING - value sent on UART-%d: %s ", uartnum, new_str2);
+                    xQueueSend(xQueueUart2Data,(void *)&new_str2,(TickType_t )0); 
                 }else{
                     // Both UARTs are busy
                     // Let ignore this packet. But the better to store packet at the rignbuffer or at the xQueue
-                    ESP_LOGI(TAG, "ROUTING - Both UARTs are busy MSG=%s ", repl_data);
+                    ESP_LOGI(TAG, "ROUTING - Both UARTs are busy cycle16=%d  pin=%d ", cycle16, pin);
                 }
             }
-//#endif
+            cycle16++;
+            cycle16 = cycle16 % MSGNUM;
         } // if( (xQueueReceive( xQueueTimer,...
 #ifdef PRINT_TIME
             diff1 = esp_timer_get_time() - start;
